@@ -67,7 +67,6 @@ instance RealFloat t => Monoid (Pass1 t) where
             k1 = fromIntegral c1
             k2 = fromIntegral c2
 
-expectedMoment mu q k = k*(mu-q)^2
 addExcessMoments s1 k1 s2 k2 a1 a2 = a1 + a2 + u12
     where
         u12 = (k1*s2 - k2*s1)^2 / (k1*k2*(k1+k2))
