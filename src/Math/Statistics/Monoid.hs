@@ -32,21 +32,28 @@ chunk n = go
 data Pass1 t = Pass1
     { p1sum     :: !t
     , p1count   :: !Int
-    , p1a       :: !t
-    , p1b       :: !t
-    , p1q       :: t
+    , p1a       :: !t   -- "excess" moment about 0
+    , p1b       :: !t   -- "excess" moment about Q
+    , p1q       :: t    -- Q
     } deriving (Eq, Show)
 
 instance RealFloat t => Monoid (Pass1 t) where
     mempty = Pass1 0 0 0 0 1
     mappend (Pass1 _ 0 _ _ _) p2 = p2
     mappend p1 (Pass1 _ 0 _ _ _) = p1
-    mappend p1@(Pass1 s1 c1 a1 b1 q1) p2@(Pass1 s2 c2 a2 b2 q2) = Pass1 (s1 + s2) (c1+c2) (a1 + a2) (b1' + b2') $! q
+    mappend p1@(Pass1 s1 c1 a1 b1 q1) p2@(Pass1 s2 c2 a2 b2 q2) = Pass1 (s1 + s2) (c1+c2) (addM a1 a2) (addM b1' b2') $! q
         where
             q = balanceQ p1 p2
             b1' = recenterQ q p1
             b2' = recenterQ q p2
-        
+            addM = addExcessMoments s1 k1 s2 k2
+            k1 = fromIntegral c1
+            k2 = fromIntegral c2
+
+expectedMoment mu q k = k*(mu-q)^2
+addExcessMoments s1 k1 s2 k2 a1 a2 = a1 + a2 + u12
+    where
+        u12 = (k1*s2 - k2*s1)^2 * recip (k1*k2*(k1+k2))
 
 -- only a useful monoid in the presence of a known mean:
 data Pass2 t = Pass2
@@ -68,11 +75,7 @@ q x = head (dropWhile ((< x)) qs)
     where
         qs = iterate (*16) 16
 
-pass1 x = Pass1 x 1 (x_2) ((x-qx)^2) qx
-    where
-        x_2 = x*x
-        qx = q x
-        --q = 1 + x_2
+pass1 x = Pass1 x 1 0 0 (q x)
 
 pass2 p1 = p2
     where
@@ -86,7 +89,7 @@ pass2 p1 = p2
 
 -- pass1 stats
 mean   (Pass1 s c _    _    _) = realToFrac s / fromIntegral c
-var p1 = recenterQ (mean p1) p1 / (k - 1)
+var p1 = (recenterQ (mean p1) p1 {- + expectedMoment mu mu k {- 0 -} -}) / (k - 1)
     where
         k = fromIntegral (p1count p1)
 stddev p1 = sqrt (var p1)
@@ -100,34 +103,19 @@ recenterQ newQ p1@(Pass1 s c a_2r b_2r q)
     | q == newQ
     = b_2r
 recenterQ newQ p1@(Pass1 _ 0 _ _ _) = 0
-recenterQ newQ p1@(Pass1 x 1 _ _ q)
-    = -- trace ("trivially recentering " ++ show q ++ " -> " ++ show newQ)
-        ((realToFrac x-newQ)^2)
-recenterQ newQ p1@(Pass1 s c a_2 b_2 q)
+recenterQ newQ p1@(Pass1 _ 1 _ _ _) = 0
+recenterQ newQ p1@(Pass1 s c a_2x b_2x q)
     = -- trace ("recentering " ++ show q ++ " -> " ++ show newQ) 
-    newB
---        (mu_sub_m_2 + d_2)
---        ((mu_sub_m) ^ 2 + d_2)
---        ((mu - m) ^ 2 + d_2)
+    newB - expectedMoment mu newQ k
         where
             newB = a_2 + k * newQ * (newQ - u)
             u = q + (a_2 - b_2) / (k * q)
+            a_2 = a_2e + a_2x
+            b_2 = b_2e + b_2x
+            a_2e = expectedMoment mu 0 k
+            b_2e = expectedMoment mu q k
             k = fromIntegral c
-            
---            mu_sub_m_2 = (newQ * k * 2 * q - r)^2 * s
---            d_2 = a_2 - r^2 * s
-            
---            r = q_2 + (a_2 - b_2) / k
---            t = newQ * q
-            
-            
-            -- mu = newQ * sqrt_k
-            -- m = (k*q_2 + a_2 - b_2) / (2 * q * sqrt_k)
-            -- --d_2 = a_2 - m^2
-            -- q_2 = q^2
-            -- sqrt_k = sqrt k
-            -- k = fromIntegral c
-
+            mu = mean p1
 
 x ~= y 
     = abs (x-y) < epsilon * max x y
