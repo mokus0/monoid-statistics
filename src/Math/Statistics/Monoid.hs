@@ -1,16 +1,38 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Math.Statistics.Monoid where
 
+import qualified Math.Statistics as S
 import Data.Monoid
 import Debug.Trace
 
-test = stddev (p1 `mappend` p2) - 72168.92798612619
+-- |these functions are more of an experiment than a usable library.
+-- the stddev part in particular is cool but only numerically stable for values
+-- with magnitude less than about 1e15 (for Double) and even then I haven't
+-- tested it or analyzed it very thoroughly.  Mostly it's just a nifty
+-- little generalization of one-pass stddev tricks to support arbitrary
+-- concatenation of series summaries.
+
+test = stddev (p1 `mappend` p2) - S.stddev (x++y)
     where
         w = 50000.0                                  
         p1 = mconcat (map pass1 x); x = [1..w]       
         p2 = mconcat (map pass1 y); y = [w+1..250000]
 
-test2 = stddev (chunkReduce 1000 pass1 [1..10000]) - 2886.8956799071675
+test2 = stddev (chunkReduce 1000 pass1 x) - S.stddev x
+    where x = [1..10000]
+test3 = stddev (chunkReduce 1000 pass1 $ map (1e10+) x) - S.stddev x
+    where x = [1..10000]
+
+-- test4 shows about where instability creeps into stddev algorithm for large values.
+test4 = stddev (chunkReduce 10 pass1 $ map (+big) x) - S.stddev (map ((subtract big).(+big)) x)
+    where 
+        big = 1e17
+        x = [1..10000]
+test5 = (stddev (chunkReduce 1000 pass1 $ map (1e10+) x) - s) / s
+    where
+        x = (1e20:[1..10000])
+        s = S.stddev x
+
 
 chunkReduce :: Monoid b => Int -> (a -> b) -> [a] -> b
 chunkReduce n f xs = chunkConcat n (map f xs)
@@ -53,7 +75,7 @@ instance RealFloat t => Monoid (Pass1 t) where
 expectedMoment mu q k = k*(mu-q)^2
 addExcessMoments s1 k1 s2 k2 a1 a2 = a1 + a2 + u12
     where
-        u12 = (k1*s2 - k2*s1)^2 * recip (k1*k2*(k1+k2))
+        u12 = (k1*s2 - k2*s1)^2 / (k1*k2*(k1+k2))
 
 -- only a useful monoid in the presence of a known mean:
 data Pass2 t = Pass2
@@ -70,12 +92,18 @@ instance Num t => Monoid (Pass2 t) where
 -- the values p1a and p1b (moments about 0 and q respectively).  The further q
 -- is from the actual mean of the set, the more truncation error will be
 -- introduced in the computation for variance and stddev.
+-- In practice, the stability of this algorithm seems to be almost totally 
+-- insensitive to the value returned, so currently it just returns a
+-- constant to avoid wasted time and loss of precision from too many 
+-- recenters.
 q :: (Fractional a, Ord a) => a -> a
-q x = head (dropWhile ((< x)) qs)
+q x = 5000.5 -- head (dropWhile ((< x)) qs)
     where
         qs = iterate (*16) 16
 
-pass1 x = Pass1 x 1 0 0 (q x)
+pass1 x = Pass1 x 1 0 0 qx
+    where
+        qx = q x
 
 pass2 p1 = p2
     where
@@ -89,7 +117,7 @@ pass2 p1 = p2
 
 -- pass1 stats
 mean   (Pass1 s c _    _    _) = realToFrac s / fromIntegral c
-var p1 = (recenterQ (mean p1) p1 {- + expectedMoment mu mu k {- 0 -} -}) / (k - 1)
+var p1 = recenterQ (mean p1) p1 / (k - 1)
     where
         k = fromIntegral (p1count p1)
 stddev p1 = sqrt (var p1)
@@ -104,18 +132,11 @@ recenterQ newQ p1@(Pass1 s c a_2r b_2r q)
     = b_2r
 recenterQ newQ p1@(Pass1 _ 0 _ _ _) = 0
 recenterQ newQ p1@(Pass1 _ 1 _ _ _) = 0
-recenterQ newQ p1@(Pass1 s c a_2x b_2x q)
-    = -- trace ("recentering " ++ show q ++ " -> " ++ show newQ) 
-    newB - expectedMoment mu newQ k
-        where
-            newB = a_2 + k * newQ * (newQ - u)
-            u = q + (a_2 - b_2) / (k * q)
-            a_2 = a_2e + a_2x
-            b_2 = b_2e + b_2x
-            a_2e = expectedMoment mu 0 k
-            b_2e = expectedMoment mu q k
-            k = fromIntegral c
-            mu = mean p1
+recenterQ newQ p1@(Pass1 _ _ a b q)
+    | b == a    = a
+    | otherwise
+    = (b - a) * (newQ / q) + a
+            
 
 x ~= y 
     = abs (x-y) < epsilon * max x y
@@ -130,7 +151,7 @@ balanceQ p1@(Pass1 s1 c1 _ _ q1) p2@(Pass1 s2 c2 _ _ q2)
     = max q1 q2
     
     | otherwise
-    = q  $ sqrt (s1+s2) -- (mean2 p1 p2)
+    = q $ (mean2 p1 p2)
     
     where
         mean2 (Pass1 s1 c1 _ _ _) (Pass1 s2 c2 _ _ _) = (s1 + s2) / fromIntegral (c1+c2)
