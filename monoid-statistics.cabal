@@ -7,7 +7,7 @@ build-type:             Simple
 
 author:                 James Cook <your email here>
 maintainer:             James Cook <your email here>
-license:                Unspecified
+license:                PublicDomain
 homepage:               /dev/null
 
 category:               Unclassified
@@ -16,5 +16,5 @@ description:            I'm too lame to describe my project
 
 Library
   hs-source-dirs:       src
-  exposed-modules:      
+  exposed-modules:      Math.Statistics.Monoid
   build-depends:        base >= 3
