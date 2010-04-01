@@ -1,18 +1,21 @@
 name:                   monoid-statistics
-version:                0.0.0.1
+version:                0.0.0.2
 stability:              experimental
 
 cabal-version:          >= 1.2
 build-type:             Simple
 
-author:                 James Cook <your email here>
-maintainer:             James Cook <your email here>
+author:                 James Cook <james.cook@usma.edu>
+maintainer:             James Cook <james.cook@usma.edu>
 license:                PublicDomain
 homepage:               /dev/null
 
 category:               Unclassified
-synopsis:               I'm too lame to describe my project
-description:            I'm too lame to describe my project
+synopsis:               Monoids for computing statistics
+description:            Monoids for computing statistics in constant space,
+                        supporting arbitrary concatenation of (the statistical
+                        summaries of) datasets without requiring those
+                        original data sets.
 
 Library
   hs-source-dirs:       src
