@@ -193,3 +193,6 @@ instance (Fractional a, Ord a) => Monoid (AutoCovar a) where
 autoCovar      (AutoCovar _ _ c) = covar c
 autoCorrel     (AutoCovar _ _ c) = correl c
 autoCorrelBy f (AutoCovar _ _ c) = correlBy f c
+
+-- correlogram     xs = drop 1 $ catMaybes $ map correl       [mconcat $ zipWith mkCovar xs ys | ys <- tails xs]
+-- correlogramBy f xs = drop 1 $ catMaybes $ map (correlBy f) [mconcat $ zipWith mkCovarBy xs ys | ys <- tails xs]
